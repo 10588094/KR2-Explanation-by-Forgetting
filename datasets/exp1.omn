@@ -1,8 +1,0 @@
-Ontology(<http://www.example.com/explanation1>
-EquivalentClasses(<http://www.co-ode.org/ontologies/pizza/pizza.owl#VegetarianPizza> ObjectIntersectionOf(<http://www.co-ode.org/ontologies/pizza/pizza.owl#Pizza> ObjectComplementOf(ObjectSomeValuesFrom(<http://www.co-ode.org/ontologies/pizza/pizza.owl#hasTopping> <http://www.co-ode.org/ontologies/pizza/pizza.owl#FishTopping>)) ObjectComplementOf(ObjectSomeValuesFrom(<http://www.co-ode.org/ontologies/pizza/pizza.owl#hasTopping> <http://www.co-ode.org/ontologies/pizza/pizza.owl#MeatTopping>))) )
-SubClassOf(<http://www.co-ode.org/ontologies/pizza/pizza.owl#Napoletana> ObjectSomeValuesFrom(<http://www.co-ode.org/ontologies/pizza/pizza.owl#hasTopping> <http://www.co-ode.org/ontologies/pizza/pizza.owl#AnchoviesTopping>))
-SubClassOf(<http://www.co-ode.org/ontologies/pizza/pizza.owl#AnchoviesTopping> <http://www.co-ode.org/ontologies/pizza/pizza.owl#FishTopping>)
-EquivalentClasses(<http://www.co-ode.org/ontologies/pizza/pizza.owl#NonVegetarianPizza> ObjectIntersectionOf(<http://www.co-ode.org/ontologies/pizza/pizza.owl#Pizza> ObjectComplementOf(<http://www.co-ode.org/ontologies/pizza/pizza.owl#VegetarianPizza>)) )
-SubClassOf(<http://www.co-ode.org/ontologies/pizza/pizza.owl#NamedPizza> <http://www.co-ode.org/ontologies/pizza/pizza.owl#Pizza>)
-SubClassOf(<http://www.co-ode.org/ontologies/pizza/pizza.owl#Napoletana> <http://www.co-ode.org/ontologies/pizza/pizza.owl#NamedPizza>)
-)
