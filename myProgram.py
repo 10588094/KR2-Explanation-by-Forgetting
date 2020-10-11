@@ -1,4 +1,5 @@
 import os
+from owlready2 import *
 
 # This is an example python programme which shows how to use the different stand-alone versions of OWL reasoners and forgetting programme
 
@@ -52,8 +53,39 @@ import os
 ######################### EXPERIMENT ######################
 
 def get_signature(inputOntology, inputSubclassStatements):
-    # return the best option
-    return "datasets/signature.txt"
+    signature = "datasets/signature.txt"
+
+    # read inputSubclassStatemnt
+    subclassStatements = []
+    subClassFile = open(inputSubclassStatements)
+    data = subClassFile.read().split(' ')
+
+    for statement in data:
+        subclassStatements.append(statement.strip('<>'))
+
+    # Read input ontology
+    base_uri = "http://www.co-ode.org/ontologies/pizza/pizza.owl#"
+    onto = get_ontology(inputOntology).load()
+    ontoClasses = list(onto.classes())
+    sigContent = False
+
+    # pick random class that is not an input subclass
+    for item in ontoClasses:
+        signatureOption = base_uri + str(item).lstrip('pizza.')
+        if signatureOption in subclassStatements:
+            continue
+        else:
+            sigContent = signatureOption
+
+    print(sigContent)
+    # Write signature file
+    f = open(signature, "a")
+    f.truncate(0)
+    if sigContent:
+        f.write(sigContent)
+    f.close()
+
+    return signature
 
 
 # inputOntology = total ontology, like 'exp10-1.omn'
@@ -67,18 +99,18 @@ def explain_by_forgetting(inputOntology, inputSubclassStatements, method):
 
     i = 1
     while True:
+        print('-----------loop', i)
         # Get a signature
         signature = get_signature(inputOntology, inputSubclassStatements)
-        if (1 < 0): # if signature is emtpy
+        if os.stat(signature).st_size == 0: # if signature is emtpy
             break
         # Forget:
         os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' + inputOntology + ' --method ' + method + ' --signature ' + signature)
         # set the resulting ontology as the new ontology
-        inputOntology = "result.owl"
+        inputOntology = "forget_gen_" + str(i) + ".owl"
         # and save the result as forget_gen_i.owl
         os.rename("result.owl","forget_gen_" + str(i) + ".owl")
         i+= 1
-        break
 
 
 ont = "datasets/exp1.omn"
