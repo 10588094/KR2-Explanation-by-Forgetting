@@ -77,7 +77,7 @@ def get_signature(inputOntology, inputSubclassStatements):
 
         if signatureOption in subclassStatements:
             ontoClasses.remove(item)
-            if not ontoClasses:
+            if ontoClasses == []:
                 break
         else:
             sigContent = signatureOption
