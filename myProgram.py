@@ -1,8 +1,24 @@
 import os
 import re
+import sys
 import random
+import shutil
+import collections
 from owlready2 import *
 
+Strategy = sys.argv[1]
+
+# strategy, random on default 
+strategy1 = False
+strategy2 = False
+strategy3 = False
+
+if Strategy == "-S1": #less frequent classes first
+    strategy1 = True
+elif Strategy == "-S2": #most frequent classes first
+    strategy2 = True
+else:
+    strategy3= True #random
 # This is an example python programme which shows how to use the different stand-alone versions of OWL reasoners and forgetting programme
 
 # Choose the ontology (in the OWL format) for which you want to explain the entailed subsumption relations.
@@ -74,12 +90,14 @@ def save_subsets(inputOntology):
     subclasses = open("datasets/subClasses.nt")
     lines = subclasses.readlines()
     file_count = 1
+    subclasses.close()
     # for every subset
     for line in lines:
         if line.strip():
-            # save as individual subset
-            with open('datasets/subsets/Subset_{}.nt'.format(file_count), 'w') as outfile:
-                outfile.write(line)
+            if file_count<11:
+                # save as individual subset
+                with open('datasets/subsets/Subset_{}.nt'.format(file_count), 'w') as outfile:
+                    outfile.write(line)
         file_count += 1
 
 
@@ -95,10 +113,100 @@ def save_explanations():
         # for every explanation, rename and add it to justifications folder
         for expFile in os.listdir("datasets"):
             if expFile.startswith("exp"):
-                newName = "datasets/justifications/exp" + str(fileList.index(file) + 1) + "-" + str(expFile[5]) + "_gen_0.omn"
+                #number sub
+                x = expFile.find("-")
+                y = expFile.find(".")
+                t=expFile[(x+1):y]
+                
+                newName = "datasets/justifications/exp" + str(fileList.index(file) + 1) + "-" + str(t) + "_gen_0.omn"
                 oldName = "datasets/" + str(expFile)
                 os.rename(oldName, newName)
 
+                #opening new file
+                counter = 0
+                with open(newName) as checkFile:
+                    content = checkFile.read()
+                    lines = content.split("\n")
+                    #counting amount of lines
+                    for i in lines:
+                        if i:
+                            counter+=1 
+                #delete small justifications
+                if counter<5:
+                    os.remove(newName)
+
+def get_signature_minmax(inputOntology, inputSubclassStatements):
+    signature = "datasets/signature.txt"
+    text = open(inputOntology)
+    subclass = open(inputSubclassStatements, 'r')
+    print(text)
+    print(subclass)
+
+    list_axioms = []
+    list_subclasses = []
+
+    base_uri = "http://www.co-ode.org/ontologies/pizza/pizza.owl#"
+    full_classes = []
+    onto = get_ontology(inputOntology).load()
+    ontoClasses = list(onto.classes())
+    print(ontoClasses)
+
+    # read inputSubclassStatemnt
+    for line in text:
+        link_regex = re.compile('((https?):((//)|(\\\\))+([\w\d:#@%/;$()~_?\+-=\\\.&](#!)?)*)', re.DOTALL)
+        links = re.findall(link_regex, line)
+        for lnk in links:
+            if lnk[0] == "http://www.w3.org/2002/07/owl#" or lnk[0] == "http://www.w3.org/2002/07/owl" or lnk[
+                0] == "http://www.w3.org/1999/02/22-rdf-syntax-ns#" or lnk[0] == "http://www.w3.org/2002/07/owl#" or \
+                            lnk[0] == "http://www.w3.org/2001/XMLSchema#" or lnk[
+                0] == "http://www.w3.org/2000/01/rdf-schema#" or lnk[0] == "http://owlapi.sourceforge.net":
+                pass
+            else:
+                axiom = lnk[0]
+                for item in ontoClasses:
+                    signatureOption = base_uri + str(item).lstrip('pizza.')
+                    full_classes.append(signatureOption)
+                if axiom in full_classes:
+                    list_axioms.append(axiom)
+
+    url_counts = collections.Counter(list_axioms)
+
+    for line in subclass:
+        link_regex = re.compile('((https?):((//)|(\\\\))+([\w\d:#@%/;$()~_?\+-=\\\.&](#!)?)*)', re.DOTALL)
+        links = re.findall(link_regex, line)
+        for lnk in links:
+            list_subclasses.append(lnk[0])
+
+    subclass_count = collections.Counter(list_subclasses)
+    print('sub', subclass_count)
+
+    for url in list(url_counts.keys()):
+        if url in subclass_count:
+            del url_counts[url]
+
+    print('url', url_counts)
+
+    if url_counts != {}:
+        if (strategy2):
+            newSignature = max(url_counts, key=url_counts.get)
+        else:
+            newSignature = min(url_counts, key=url_counts.get)
+        sigContent = newSignature
+    else:
+        print('sigcontent is leeg')
+        sigContent = False
+
+    print('sigContent:', sigContent)
+
+    # Write signature file
+    f = open(signature, "w")
+    if sigContent:
+        f.write(sigContent)
+    f.close()
+    text.close()
+    subclass.close()
+
+    return signature
 
 def get_signature(inputOntology, inputSubclassStatements):
     signature = "datasets/signature.txt"
@@ -132,8 +240,7 @@ def get_signature(inputOntology, inputSubclassStatements):
             break
 
     # Write signature file
-    f = open(signature, "a")
-    f.truncate(0)
+    f = open(signature, "w")
     if sigContent:
         f.write(sigContent)
     f.close()
@@ -153,43 +260,83 @@ def explain_all_by_forgetting(method):
         ## Transform .omn file to .owl file using LETHE and emtpy signature
         inputOntology = "datasets/justifications/" + file
         signature = "datasets/empty_signature.txt"
-        os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' + inputOntology + ' --method ' + method  + ' --signature ' + signature)
+        os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' 
+                  + inputOntology + ' --method ' + method  + ' --signature ' + signature)
 
-        ## replace .omn by .owl file for first gereration (..._gen_0.owl)
+        # # replace .omn by .owl file for first gereration (..._gen_0.owl)
         os.remove(inputOntology) # remove ..._gen_0.owl
         inputOntology = re.sub(r'(.omn)','.owl',inputOntology)
         os.rename("result.owl", inputOntology) # change result.owl to datasets/justifications/exp1-1_gen_0.owl
 
         i = 1
-        while True:
+        while (True):
 
             # Get a new signature
-            signature = get_signature(inputOntology, subclassStatement)
+            if (strategy3):
+                signature = get_signature(inputOntology, subclassStatement)
+            else:
+                signature = get_signature_minmax(inputOntology, subclassStatement)
 
             # if signature is emtpy, end function
             if (os.stat("datasets/signature.txt").st_size == 0):
                 break # goes to next justification file
 
             # Forget:
-            os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' + inputOntology + ' --method ' + method + ' --signature ' + signature)
+            os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' 
+                      + inputOntology + ' --method ' + method + ' --signature ' + signature)
 
             # save the result as expx-y_gen_{i}.owl
-            os.rename("result.owl", str(re.sub(r'\d+(?=.owl)', str(i), inputOntology)))
+            newGeneration = str(re.sub(r'\d+(?=.owl)', str(i), inputOntology))
+            os.rename("result.owl", newGeneration)
 
             # set new file as new inputOntology, repeat forgetting
-            inputOntology = str(re.sub(r'\d+(?=.owl)', str(i), inputOntology))
+            inputOntology = newGeneration
             i += 1
 
+def owl_len(fname):
+    onto = get_ontology(fname).load()
+    axiomList = list(onto.general_axioms())
+    return len(axiomList)
+
+def analyse():
+    fileList = sorted(os.listdir("datasets/justifications/"), key=natural_keys)
+    currentExp = 'exp1-1'
+    expList = []
+    expSumList = []
+    sum = 0
+    for file in fileList:
+        newExp = re.search('(.+)(?=_gen)', file).group(1)
+        if newExp != currentExp:
+            expList.append(currentExp)
+            expSumList.append(sum)
+            sum = 0
+            currentExp = newExp
+        # calculate sum
+        sumFile = owl_len('datasets/justifications/' + file)
+        sum += sumFile
+    return expList,expSumList
 
 ################# RUNNING ################
 
 inputOntology = "datasets/pizza_super_simple.owl"
 
+#deleting files in directory
+shutil.rmtree("datasets/justifications")
+shutil.rmtree("datasets/subsets")
+#making dir again
+os.mkdir("datasets/justifications")
+os.mkdir("datasets/subsets")
+
 ## first save all subsets
-# save_subsets(inputOntology)
+save_subsets(inputOntology)
 
 ## save all explanations of this subset
-# save_explanations()
+save_explanations()
 
 ## for every explanation, compute all forgetting iterations
 explain_all_by_forgetting("2")
+
+## analyse the results
+# expList, expSumList = analyse()
+# print(expList)
+# print(expSumList)
