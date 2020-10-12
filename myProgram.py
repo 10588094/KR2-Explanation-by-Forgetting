@@ -1,4 +1,5 @@
 import os
+import re
 import random
 from owlready2 import *
 
@@ -51,7 +52,53 @@ from owlready2 import *
 # --> uncomment the following line to run this function
 #os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' + forgetOntology + ' --method ' + method  + ' --signature ' + signature)
 
+# https://stackoverflow.com/questions/5967500/how-to-correctly-sort-a-string-with-a-number-inside
+def atoi(text):
+    return int(text) if text.isdigit() else text
+
+def natural_keys(text):
+    '''
+    alist.sort(key=natural_keys) sorts in human order
+    http://nedbatchelder.com/blog/200712/human_sorting.html
+    (See Toothy's implementation in the comments)
+    '''
+    return [ atoi(c) for c in re.split(r'(\d+)', text) ]
+
 ######################### EXPERIMENT ######################
+
+def save_subsets(inputOntology):
+    # first save all subsets
+    os.system('java -jar kr_functions.jar ' + 'saveAllSubClasses' + " " + inputOntology)
+
+    # then save all subsets in a separate file called "Subset_{number}"
+    subclasses = open("datasets/subClasses.nt")
+    lines = subclasses.readlines()
+    file_count = 1
+    # for every subset
+    for line in lines:
+        if line.strip():
+            # save as individual subset
+            with open('datasets/subsets/Subset_{}.nt'.format(file_count), 'w') as outfile:
+                outfile.write(line)
+        file_count += 1
+
+
+def save_explanations():
+    # for every subset, save all explanations for this subset
+    fileList = sorted(os.listdir("datasets/subsets/"),key=natural_keys)
+    for file in fileList:
+
+        # save all explanations (to datasets/ by default)
+        filePath = "datasets/subsets/" + file
+        os.system('java -jar kr_functions.jar ' + 'saveAllExplanations' + " " + inputOntology + " " + filePath)
+
+        # for every explanation, rename and add it to justifications folder
+        for expFile in os.listdir("datasets"):
+            if expFile.startswith("exp"):
+                newName = "datasets/justifications/exp" + str(fileList.index(file) + 1) + "-" + str(expFile[5]) + "_gen_0.omn"
+                oldName = "datasets/" + str(expFile)
+                os.rename(oldName, newName)
+
 
 def get_signature(inputOntology, inputSubclassStatements):
     signature = "datasets/signature.txt"
@@ -68,6 +115,7 @@ def get_signature(inputOntology, inputSubclassStatements):
     base_uri = "http://www.co-ode.org/ontologies/pizza/pizza.owl#"
     onto = get_ontology(inputOntology).load()
     ontoClasses = list(onto.classes())
+
     sigContent = False
 
     # pick random class that is not an input subclass
@@ -92,68 +140,56 @@ def get_signature(inputOntology, inputSubclassStatements):
 
     return signature
 
-def explain_by_forgetting(inputOntology, inputSubclassStatement, method):
-    ontologyName = inputOntology # is datasets/justifications/exp1-1_gen_0.omn
 
-    # Transform .omn file to .owl file using LETHE and emtpy signature
-    print("TRANSFORMING .omn TO .owl FILE USING LETHE AND EMPTY SIGNATURE")
-    signature = "datasets/empty_signature.txt"
-    os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' + inputOntology + ' --method ' + method  + ' --signature ' + signature)
+def explain_all_by_forgetting(method):
+    # for all files in datasets/justifications
+    fileList = sorted(os.listdir("datasets/justifications/"), key=natural_keys)
+    for file in fileList:
 
-    # replace .omn by .owl file for first gereration (..._gen_0.owl)
-    os.remove(inputOntology) # remove ..._gen_0.owl
-    os.rename("result.owl",inputOntology) # change result.owl to datasets/justifications/exp1-1_gen_0.omn
+        # set subset file
+        subsetNumber = re.findall(r'\d*(?=-)',file) # 122
+        subclassStatement = "datasets/subsets/Subset_" + str(subsetNumber[0]) + ".nt"
 
-    i = 1
-    while (True):
+        ## Transform .omn file to .owl file using LETHE and emtpy signature
+        inputOntology = "datasets/justifications/" + file
+        signature = "datasets/empty_signature.txt"
+        os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' + inputOntology + ' --method ' + method  + ' --signature ' + signature)
 
-        # Get a new signature
-        signature = get_signature(inputOntology, inputSubclassStatement)
+        ## replace .omn by .owl file for first gereration (..._gen_0.owl)
+        os.remove(inputOntology) # remove ..._gen_0.owl
+        inputOntology = re.sub(r'(.omn)','.owl',inputOntology)
+        os.rename("result.owl", inputOntology) # change result.owl to datasets/justifications/exp1-1_gen_0.owl
 
-        # if signature is emtpy, end function
-        if (os.stat("datasets/signature.txt").st_size == 0):
-            break
+        i = 1
+        while True:
 
-        # Forget:
-        os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' + inputOntology + ' --method ' + method + ' --signature ' + signature)
+            # Get a new signature
+            signature = get_signature(inputOntology, subclassStatement)
 
-        # save the result as forget_gen_{i}.owl
-        os.rename("result.owl", str(ontologyName.replace("_0","_" + str(i))))
+            # if signature is emtpy, end function
+            if (os.stat("datasets/signature.txt").st_size == 0):
+                break # goes to next justification file
 
-        # set new file as new inputOntology, repeat forgetting
-        inputOntology = str(ontologyName.replace("_0","_" + str(i)))
-        i+= 1
+            # Forget:
+            os.system('java -cp lethe-standalone.jar uk.ac.man.cs.lethe.internal.application.ForgettingConsoleApplication --owlFile ' + inputOntology + ' --method ' + method + ' --signature ' + signature)
 
-def get_subsets_justifications_forgetting(inputOntology):
-    # first save all subsets
-    os.system('java -jar kr_functions.jar ' + 'saveAllSubClasses' + " " + inputOntology)
+            # save the result as expx-y_gen_{i}.owl
+            os.rename("result.owl", str(re.sub(r'\d+(?=.owl)', str(i), inputOntology)))
 
-    # then save all subsets in a separate file called "Subset_{number}"
-    subclasses = open("datasets/subClasses.nt")
-    lines = subclasses.readlines()
-    file_count = 1
-    # for every subset
-    for line in lines:
-        if line.strip():
-            # save as individual subset
-            with open('datasets/subsets/Subset_{}.nt'.format(file_count), 'w') as outfile:
-                outfile.write(line)
+            # set new file as new inputOntology, repeat forgetting
+            inputOntology = str(re.sub(r'\d+(?=.owl)', str(i), inputOntology))
+            i += 1
 
-        # save all explanations for this subset
-        fileName = 'datasets/subsets/Subset_' + str(file_count) + ".nt"
-        os.system('java -jar kr_functions.jar ' + 'saveAllExplanations' + " " + inputOntology + " " + fileName)
 
-        # for every explanation, rename and add it to justifications folder
-        for file in os.listdir("datasets"):
-            if file.startswith("exp"):
-                newName = "datasets/justifications/exp" + str(file_count) + "-" + str(file[5]) + "_gen_0.owl"
-                oldName = "datasets/" + str(file)
-                os.rename(oldName,newName)
-
-                # als de explanation groter is dan... !!!!!!!!!!!!!!!!!
-                explain_by_forgetting(newName, fileName, "2")
-
-        file_count += 1
+################# RUNNING ################
 
 inputOntology = "datasets/pizza_super_simple.owl"
-get_subsets_justifications_forgetting(inputOntology)
+
+## first save all subsets
+# save_subsets(inputOntology)
+
+## save all explanations of this subset
+# save_explanations()
+
+## for every explanation, compute all forgetting iterations
+explain_all_by_forgetting("2")
